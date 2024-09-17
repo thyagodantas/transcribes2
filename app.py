@@ -161,6 +161,11 @@ def baixar_video():
 @app.route('/progress/<task_id>')
 def progress(task_id):
     def generate():
+        # Verificar se o task_id existe no dicionário progress_status
+        if task_id not in progress_status:
+            yield f"data: Tarefa {task_id} não encontrada.\n\n"
+            return
+
         while not progress_status[task_id]["completed"]:
             yield f"data: {progress_status[task_id]['message']}\n\n"
             time.sleep(5)
@@ -168,6 +173,7 @@ def progress(task_id):
         yield f"data: Transcrição finalizada: {progress_status[task_id]['transcription']}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
