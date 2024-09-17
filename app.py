@@ -5,6 +5,7 @@ import re
 import os
 import yt_dlp
 import moviepy.config as mp_conf
+import subprocess
 
 app = Flask(__name__)
 
@@ -30,9 +31,10 @@ def download_video_with_cookies(url, resolution, cookies_file):
             'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',  # Melhor qualidade com resolução máxima especificada
             'cookiefile': cookies_file,  # Arquivo de cookies exportado
             'outtmpl': '%(title)s.%(ext)s',  # Nome do arquivo de saída
-            'noprogress': True,  # Não exibir o progresso no terminal
-            'retries': 10,  # Tentar fazer o download novamente até 10 vezes
             'continuedl': False,  # Não continuar downloads interrompidos, forçar novo download
+            'force_generic_extractor': True,  # Força o uso do extrator genérico
+            'noprogress': True,  # Não exibir progresso
+            'retries': 10  # Tentativas adicionais para lidar com falhas de rede
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -45,16 +47,16 @@ def download_video_with_cookies(url, resolution, cookies_file):
         return None, str(e)
 
 
+
 def convert_to_wav(video_path):
     try:
-        print(f"Convertendo {video_path} para WAV...")
-        video = VideoFileClip(video_path)
-        audio_path = video_path.replace('.mp4', '.wav')
-        video.audio.write_audiofile(audio_path, codec='pcm_s16le')
+        audio_path = video_path.replace('.webm', '.wav')
+        command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '2', audio_path]
+        subprocess.run(command, check=True)
         print(f"Conversão concluída: {audio_path}")
         return audio_path, None
-    except Exception as e:
-        print(f"Erro ao converter para WAV: {str(e)}")
+    except subprocess.CalledProcessError as e:
+        print(f"Erro ao converter para WAV com ffmpeg: {str(e)}")
         return None, str(e)
 
 def transcribe_audio(audio_path):
