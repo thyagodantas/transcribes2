@@ -19,11 +19,6 @@ mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 model = whisper.load_model("base")
 redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
-progress_status = {
-    "message": "Esperando para iniciar...",
-    "completed": False
-}
-
 @app.route('/')
 def index():
     return render_template('index.html')
@@ -94,8 +89,10 @@ def process_transcription(video_path, task_id):
     audio_path, error_message = convert_to_wav(video_path)
 
     if not audio_path:
-        redis_client.hset(task_id, "message", f"Erro ao converter vídeo: {error_message}")
-        redis_client.hset(task_id, "completed", True)
+        redis_client.hset(task_id, mapping={
+            "message": f"Erro ao converter vídeo: {error_message}",
+            "completed": "True"  # Armazenar como string
+        })
         return
 
     # Etapa 2: Transcrever o áudio
@@ -107,11 +104,13 @@ def process_transcription(video_path, task_id):
         redis_client.hset(task_id, mapping={
             "message": "Transcrição concluída.",
             "transcription": transcription,
-            "completed": True
+            "completed": "True"  # Armazenar como string
         })
     else:
-        redis_client.hset(task_id, "message", f"Erro na transcrição: {error_message}")
-        redis_client.hset(task_id, "completed", True)
+        redis_client.hset(task_id, mapping={
+            "message": f"Erro na transcrição: {error_message}",
+            "completed": "True"  # Armazenar como string
+        })
 
 # Rota para baixar o vídeo e iniciar o processo de transcrição
 @app.route('/baixar_video', methods=['POST'])
@@ -138,7 +137,7 @@ def baixar_video():
     # Armazena o status no Redis com a chave do vídeo
     redis_client.hset(task_id, mapping={
         "message": "Vídeo baixado com sucesso! Iniciando transcrição...",
-        "completed": False,
+        "completed": "False",  # Armazenar como string
         "transcription": ""
     })
 
@@ -147,13 +146,13 @@ def baixar_video():
 
     return jsonify({"message": "Processo de transcrição iniciado.", "task_id": task_id}), 200
 
-# Rota SSE para enviar progresso ao frontend a cada 10 segundos
+# Rota SSE para enviar progresso ao frontend
 @app.route('/progress/<task_id>')
 def progress(task_id):
     def generate():
         while True:
             progress_status = redis_client.hgetall(task_id)
-            if not progress_status.get("completed"):
+            if not progress_status.get("completed") == "True":
                 yield f"data: {progress_status.get('message')}\n\n"
                 time.sleep(10)
             else:
