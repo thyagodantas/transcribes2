@@ -30,6 +30,9 @@ def download_video_with_cookies(url, resolution, cookies_file):
             'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',  # Melhor qualidade com resolução máxima especificada
             'cookiefile': cookies_file,  # Arquivo de cookies exportado
             'outtmpl': '%(title)s.%(ext)s',  # Nome do arquivo de saída
+            'noprogress': True,  # Não exibir o progresso no terminal
+            'retries': 10,  # Tentar fazer o download novamente até 10 vezes
+            'continuedl': False,  # Não continuar downloads interrompidos, forçar novo download
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -40,6 +43,7 @@ def download_video_with_cookies(url, resolution, cookies_file):
     except Exception as e:
         print(f"Erro ao baixar vídeo com yt-dlp: {str(e)}")
         return None, str(e)
+
 
 def convert_to_wav(video_path):
     try:
