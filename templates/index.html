@@ -81,6 +81,7 @@
       }
       #transcription-result {
         margin-top: 20px;
+        display: none; /* Esconder inicialmente */
       }
       #transcription-result h2 {
         font-size: 20px;
@@ -133,6 +134,8 @@
           // Mostrar o spinner de loading
           document.getElementById("progress-container").style.display = "block";
           document.getElementById("transcription-text").innerText = "";
+          document.getElementById("transcription-result").style.display =
+            "none"; // Esconder a transcrição
 
           // Etapa 1: Baixar o vídeo
           fetch("/baixar_video", {
@@ -158,7 +161,10 @@
                 if (progressText.startsWith("Transcrição finalizada")) {
                   eventSource.close(); // Fechar a conexão SSE após a conclusão
                   document.getElementById("progress-container").style.display =
-                    "none"; // Esconde o loading
+                    "none"; // Esconder o loading
+                  document.getElementById(
+                    "transcription-result"
+                  ).style.display = "block"; // Exibir a transcrição
 
                   // Simular a digitação da transcrição
                   typeText(
@@ -176,7 +182,7 @@
       // Função para simular a digitação
       function typeText(text) {
         let index = 0;
-        const speed = 50; // Velocidade da digitação (ms)
+        const speed = 20; // Velocidade da digitação (ms)
         const transcriptionElement =
           document.getElementById("transcription-text");
 
