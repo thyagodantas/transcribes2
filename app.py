@@ -9,7 +9,6 @@ import subprocess
 import time
 from flask_cors import CORS
 import threading
-import uuid
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://altekweb.com.br"}})
@@ -18,8 +17,10 @@ mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
 model = whisper.load_model("base")
 
-# Armazenar progresso de várias transcrições
-progress_statuses = {}
+progress_status = {
+    "message": "Esperando para iniciar...",
+    "completed": False
+}
 
 @app.route('/')
 def index():
@@ -52,6 +53,7 @@ def download_video_with_cookies(url, resolution, cookies_file):
 
 def convert_to_wav(video_path):
     try:
+        # Identificar o tipo de arquivo para substituição da extensão
         if video_path.endswith('.mkv'):
             audio_path = video_path.replace('.mkv', '.wav')
         elif video_path.endswith('.mp4'):
@@ -61,6 +63,7 @@ def convert_to_wav(video_path):
         else:
             raise ValueError("Formato de vídeo não suportado. Use MP4, MKV ou WEBM.")
         
+        # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         
@@ -83,31 +86,32 @@ def transcribe_audio(audio_path):
         print(f"Erro na transcrição: {str(e)}")
         return None, str(e)
 
-def process_transcription(video_path, transcribe_id):
-    global progress_statuses
+def process_transcription(video_path):
+    global progress_status
 
     # Etapa 1: Converter vídeo para WAV
-    progress_statuses[transcribe_id]['message'] = "Convertendo vídeo para WAV..."
+    progress_status['message'] = "Convertendo vídeo para WAV..."
     audio_path, error_message = convert_to_wav(video_path)
 
     if not audio_path:
-        progress_statuses[transcribe_id]['message'] = f"Erro ao converter vídeo: {error_message}"
-        progress_statuses[transcribe_id]['completed'] = True
+        progress_status['message'] = f"Erro ao converter vídeo: {error_message}"
+        progress_status['completed'] = True
         return
 
     # Etapa 2: Transcrever o áudio
-    progress_statuses[transcribe_id]['message'] = "Transcrevendo áudio..."
+    progress_status['message'] = "Transcrevendo áudio..."
     transcription, error_message = transcribe_audio(audio_path)
 
     if transcription:
         os.remove(audio_path)
-        progress_statuses[transcribe_id]['message'] = "Transcrição concluída."
-        progress_statuses[transcribe_id]['transcription'] = transcription
-        progress_statuses[transcribe_id]['completed'] = True
+        progress_status['message'] = "Transcrição concluída."
+        progress_status['transcription'] = transcription
+        progress_status['completed'] = True
     else:
-        progress_statuses[transcribe_id]['message'] = f"Erro na transcrição: {error_message}"
-        progress_statuses[transcribe_id]['completed'] = True
+        progress_status['message'] = f"Erro na transcrição: {error_message}"
+        progress_status['completed'] = True
 
+# Rota para baixar o vídeo e iniciar o processo de transcrição
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
     youtube_url = request.json.get('youtube_url')
@@ -126,27 +130,25 @@ def baixar_video():
     if not video_path:
         return jsonify({"error": error_message}), 500
     
-    # Gerar um ID único para esta transcrição
-    transcribe_id = str(uuid.uuid4())
-    progress_statuses[transcribe_id] = {
-        'message': "Vídeo baixado com sucesso! Iniciando transcrição...",
-        'completed': False
-    }
+    global progress_status
+    progress_status['message'] = "Vídeo baixado com sucesso! Iniciando transcrição..."
+    progress_status['completed'] = False
 
     # Iniciar o processo de transcrição em uma thread separada
-    threading.Thread(target=process_transcription, args=(video_path, transcribe_id)).start()
+    threading.Thread(target=process_transcription, args=(video_path,)).start()
 
-    return jsonify({"message": "Processo de transcrição iniciado.", "transcribe_id": transcribe_id}), 200
+    return jsonify({"message": "Processo de transcrição iniciado."}), 200
 
-@app.route('/progress/<transcribe_id>')
-def progress(transcribe_id):
+# Rota SSE para enviar progresso ao frontend a cada 10 segundos
+@app.route('/progress')
+def progress():
     def generate():
-        while not progress_statuses[transcribe_id]['completed']:
-            yield f"data: {progress_statuses[transcribe_id]['message']}\n\n"
+        while not progress_status['completed']:
+            yield f"data: {progress_status['message']}\n\n"
             time.sleep(10)
 
-        yield f"data: Transcrição finalizada: {progress_statuses[transcribe_id]['transcription']}\n\n"
-    
+        yield f"data: Transcrição finalizada: {progress_status['transcription']}\n\n"
+
     return Response(generate(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
