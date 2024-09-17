@@ -109,14 +109,37 @@
           document.getElementById("progress-container").style.display = "block";
           document.getElementById("transcription-text").innerText = "";
 
-          // Fazer requisição AJAX
-          fetch("/transcrever", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ youtube_url: youtubeUrl }),
-          })
+          // Função para implementar um timeout
+          function timeoutPromise(ms, promise) {
+            return new Promise((resolve, reject) => {
+              const timeoutId = setTimeout(() => {
+                reject(
+                  new Error("Tempo esgotado, tente novamente mais tarde.")
+                );
+              }, ms);
+              promise
+                .then((res) => {
+                  clearTimeout(timeoutId);
+                  resolve(res);
+                })
+                .catch((err) => {
+                  clearTimeout(timeoutId);
+                  reject(err);
+                });
+            });
+          }
+
+          // Faz a requisição com timeout de 5 minutos (300000 ms)
+          timeoutPromise(
+            300000, // 5 minutos
+            fetch("/transcrever", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({ youtube_url: youtubeUrl }),
+            })
+          )
             .then((response) => response.json())
             .then((data) => {
               document.getElementById("progress-container").style.display =
@@ -133,7 +156,7 @@
               document.getElementById("progress-container").style.display =
                 "none";
               document.getElementById("transcription-text").innerText =
-                "Erro: " + error;
+                "Erro: " + error.message;
             });
         });
     </script>

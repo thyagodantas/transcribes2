@@ -13,7 +13,7 @@ app = Flask(__name__)
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
 # Carregar o modelo Whisper
-model = whisper.load_model("base")
+model = whisper.load_model("tiny")
 
 # Função para validar o formato da URL do YouTube
 def is_valid_youtube_url(url):
@@ -44,7 +44,8 @@ def download_video_with_cookies(url, resolution, cookies_file):
 def convert_to_wav(video_path):
     try:
         audio_path = video_path.replace('.webm', '.wav')
-        command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '44100', '-ac', '2', audio_path]
+        # Reduzindo a taxa de amostragem para 16kHz
+        command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         print(f"Conversão concluída: {audio_path}")
         return audio_path, None
