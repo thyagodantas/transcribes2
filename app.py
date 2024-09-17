@@ -176,6 +176,5 @@ def progress(task_id):
     return Response(generate(), mimetype='text/event-stream')
 
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)
