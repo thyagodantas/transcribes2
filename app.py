@@ -97,19 +97,24 @@ def transcribe_audio(audio_path):
         print("Transcrição concluída.")
         return result['text'], None
     except Exception as e:
-        print(f"Erro na transcrição: {str(e)}")
+        print(f"Erro na transcrição: {str(e)}")  # Log do erro
         return None, str(e)
 
 @celery.task
 def process_transcription_task(video_path, task_id):
     global progress_status
+
     try:
+        # Inicializa o status do progresso para o task_id
         progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
+
+        # Etapa 1: Converter vídeo para WAV
         audio_path, error_message = convert_to_wav(video_path)
         if not audio_path:
             progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
             return
-        
+
+        # Etapa 2: Transcrever o áudio
         progress_status[task_id]["message"] = "Transcrevendo áudio..."
         transcription, error_message = transcribe_audio(audio_path)
         if transcription:
@@ -121,8 +126,11 @@ def process_transcription_task(video_path, task_id):
             }
         else:
             progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
+
     except Exception as e:
         progress_status[task_id] = {"message": f"Erro no processamento: {str(e)}", "completed": True}
+        print(f"Erro na tarefa {task_id}: {str(e)}")  # Log do erro
+
 
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
