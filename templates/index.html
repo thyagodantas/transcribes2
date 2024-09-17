@@ -172,7 +172,9 @@
                   );
                 } else if (
                   !progressText.includes("Transcrevendo áudio...") ||
-                  !progressText.includes("Convertendo vídeo para WAV...")
+                  !progressText.includes("Convertendo vídeo para WAV...") ||
+                  (!progressText.includes("Transcrevendo áudio...") &&
+                    !progressText.includes("Convertendo vídeo para WAV..."))
                 ) {
                   // Atualizar o progresso na tela apenas se não for a mensagem de transcrição
                   document.getElementById("transcription-text").innerText =
