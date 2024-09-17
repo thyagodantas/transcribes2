@@ -76,7 +76,7 @@
   <body>
     <div class="container">
       <h1>Transcrição de Vídeos do YouTube</h1>
-      <form method="POST" action="/">
+      <form id="transcription-form">
         <label for="youtube-url">URL do Vídeo do YouTube:</label>
         <input
           type="text"
@@ -88,12 +88,54 @@
         <button type="submit">Transcrever</button>
       </form>
 
+      <div id="progress-container" style="display: none">
+        <p>Processando... Isso pode levar alguns minutos.</p>
+      </div>
+
       <div id="transcription-result">
-        {% if transcricao %}
         <h2>Transcrição:</h2>
-        <pre>{{ transcricao }}</pre>
-        {% endif %}
+        <pre id="transcription-text"></pre>
       </div>
     </div>
+
+    <script>
+      document
+        .getElementById("transcription-form")
+        .addEventListener("submit", function (event) {
+          event.preventDefault();
+
+          var youtubeUrl = document.getElementById("youtube-url").value;
+
+          document.getElementById("progress-container").style.display = "block";
+          document.getElementById("transcription-text").innerText = "";
+
+          // Fazer requisição AJAX
+          fetch("/transcrever", {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ youtube_url: youtubeUrl }),
+          })
+            .then((response) => response.json())
+            .then((data) => {
+              document.getElementById("progress-container").style.display =
+                "none";
+              if (data.transcricao) {
+                document.getElementById("transcription-text").innerText =
+                  data.transcricao;
+              } else if (data.error) {
+                document.getElementById("transcription-text").innerText =
+                  "Erro: " + data.error;
+              }
+            })
+            .catch((error) => {
+              document.getElementById("progress-container").style.display =
+                "none";
+              document.getElementById("transcription-text").innerText =
+                "Erro: " + error;
+            });
+        });
+    </script>
   </body>
 </html>

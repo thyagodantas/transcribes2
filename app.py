@@ -62,49 +62,53 @@ def transcribe_audio(audio_path):
         print(f"Erro na transcrição: {str(e)}")
         return None, str(e)
 
-# Rota para exibir e processar a transcrição na mesma página
-@app.route('/', methods=['GET', 'POST'])
+# Rota principal para carregar a página inicial
+@app.route('/')
 def index():
-    transcricao = None
+    return render_template('index.html')
 
-    if request.method == 'POST':
-        youtube_url = request.form.get('youtube_url')
+# Rota assíncrona para processar a transcrição
+@app.route('/transcrever', methods=['POST'])
+def transcrever():
+    youtube_url = request.json.get('youtube_url')  # Usando JSON para a requisição AJAX
+    
+    if not youtube_url:
+        return jsonify({"error": "URL do vídeo do YouTube é necessária."}), 400
 
-        if not youtube_url:
-            return jsonify({"error": "URL do vídeo do YouTube é necessária."}), 400
+    print(f"Recebendo URL: {youtube_url}")
 
-        print(f"Recebendo URL: {youtube_url}")
+    # Verificar se a URL é válida
+    if not is_valid_youtube_url(youtube_url):
+        return jsonify({"error": "URL do vídeo do YouTube inválida."}), 400
 
-        # Verificar se a URL é válida
-        if not is_valid_youtube_url(youtube_url):
-            return jsonify({"error": "URL do vídeo do YouTube inválida."}), 400
+    # Definir uma resolução padrão (pode ser ajustada conforme necessário)
+    resolution = '360'
 
-        # Definir uma resolução padrão
-        resolution = '360'
+    # Caminho do arquivo de cookies (certifique-se de que está correto)
+    cookies_file = 'cookies.txt'
 
-        # Caminho do arquivo de cookies
-        cookies_file = 'cookies.txt'
-
-        # Download do vídeo
-        video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file)
-        if not video_path:
-            return jsonify({"error": error_message}), 500
-
-        # Converter para WAV
-        audio_path, error_message = convert_to_wav(video_path)
-        if not audio_path:
-            return jsonify({"error": error_message}), 500
-
-        # Transcrição do áudio
-        transcricao, error_message = transcribe_audio(audio_path)
-        if transcricao:
-            # Apagar os arquivos temporários após a transcrição
-            os.remove(video_path)
-            os.remove(audio_path)
-        else:
-            return jsonify({"error": error_message}), 500
-
-    return render_template('index.html', transcricao=transcricao)
+    # Download do vídeo com yt-dlp usando cookies
+    video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file)
+    
+    if not video_path:
+        return jsonify({"error": error_message}), 500
+    
+    # Converter para WAV
+    audio_path, error_message = convert_to_wav(video_path)
+    
+    if not audio_path:
+        return jsonify({"error": error_message}), 500
+    
+    # Transcrição do áudio
+    transcription, error_message = transcribe_audio(audio_path)
+    
+    if transcription:
+        # Apagar os arquivos temporários após a transcrição
+        os.remove(video_path)
+        os.remove(audio_path)
+        return jsonify({"transcricao": transcription}), 200
+    else:
+        return jsonify({"error": error_message}), 500
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
