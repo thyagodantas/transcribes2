@@ -103,18 +103,13 @@ def transcribe_audio(audio_path):
 @celery.task
 def process_transcription_task(video_path, task_id):
     global progress_status
-
     try:
-        # Inicializa o status do progresso para o task_id
         progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
-
-        # Etapa 1: Converter vídeo para WAV
         audio_path, error_message = convert_to_wav(video_path)
         if not audio_path:
             progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
             return
-
-        # Etapa 2: Transcrever o áudio
+        
         progress_status[task_id]["message"] = "Transcrevendo áudio..."
         transcription, error_message = transcribe_audio(audio_path)
         if transcription:
@@ -126,10 +121,8 @@ def process_transcription_task(video_path, task_id):
             }
         else:
             progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
-
     except Exception as e:
-        progress_status[task_id] = {"message": f"Erro no processo: {str(e)}", "completed": True}
-
+        progress_status[task_id] = {"message": f"Erro no processamento: {str(e)}", "completed": True}
 
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
@@ -150,11 +143,14 @@ def baixar_video():
         return jsonify({"error": error_message}), 500
     
     # Gera um ID único no formato generate-xxxxxx
-    task_id = f"generate-{uuid.uuid4().hex[:6]}"  # Gera um ID do tipo "generate-xxxxxx"
+    task_id = f"generate-{uuid.uuid4().hex[:6]}"
     progress_status[task_id] = {"message": "Vídeo baixado com sucesso! Iniciando transcrição...", "completed": False}
 
     # Iniciar o processo de transcrição como uma tarefa em segundo plano
     process_transcription_task.apply_async(args=[video_path, task_id])
+
+    print(f"Task ID gerado: {task_id}")
+    print(f"Status atual: {progress_status}")
 
     return jsonify({"message": "Processo de transcrição iniciado.", "task_id": task_id}), 200
 
