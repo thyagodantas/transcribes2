@@ -1,201 +1,71 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Transcrição de Vídeos do YouTube</title>
-    <link
-      rel="stylesheet"
-      href="{{ url_for('static', filename='style.css') }}"
-    />
-    <style>
-      body {
-        font-family: Arial, sans-serif;
-        background-color: #f4f4f4;
-        margin: 0;
-        padding: 0;
-      }
-      .container {
-        max-width: 800px;
-        margin: 50px auto;
-        padding: 20px;
-        background-color: #fff;
-        border-radius: 8px;
-        box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-      }
-      h1 {
-        font-size: 24px;
-        color: #333;
-        margin-bottom: 20px;
-      }
-      form {
-        display: flex;
-        flex-direction: column;
-      }
-      label {
-        font-size: 16px;
-        color: #333;
-        margin-bottom: 8px;
-      }
-      input[type="text"] {
-        padding: 10px;
-        font-size: 16px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        margin-bottom: 20px;
-      }
-      button {
-        padding: 10px;
-        font-size: 16px;
-        color: #fff;
-        background-color: #007bff;
-        border: none;
-        border-radius: 4px;
-        cursor: pointer;
-      }
-      button:hover {
-        background-color: #0056b3;
-      }
-      #progress-container {
-        margin-top: 20px;
-        display: none;
-        font-size: 18px;
-        color: #555;
-      }
-      .loading {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #007bff;
-        border-radius: 50%;
-        width: 30px;
-        height: 30px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto;
-      }
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-      #transcription-result {
-        margin-top: 20px;
-        display: none; /* Esconder inicialmente */
-      }
-      #transcription-result h2 {
-        font-size: 20px;
-        color: #333;
-      }
-      #transcription-result pre {
-        background-color: #f8f9fa;
-        padding: 10px;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        white-space: pre-wrap;
-        word-wrap: break-word;
-      }
-    </style>
-  </head>
-  <body>
-    <div class="container">
-      <h1>Transcrição de Vídeos do YouTube</h1>
-      <form id="transcription-form">
-        <label for="youtube-url">URL do Vídeo do YouTube:</label>
-        <input
-          type="text"
-          id="youtube-url"
-          name="youtube_url"
-          placeholder="Insira o URL do vídeo"
-          required
-        />
-        <button type="submit">Transcrever</button>
-      </form>
+<script>
+  document
+    .getElementById("transcription-form")
+    .addEventListener("submit", function (event) {
+      event.preventDefault();
+      var youtubeUrl = document.getElementById("youtube-url").value;
 
-      <!-- Loading Spinner -->
-      <div id="progress-container">
-        <div class="loading"></div>
-        <p>Processando... Isso pode levar alguns minutos.</p>
-      </div>
+      // Mostrar o spinner de loading
+      document.getElementById("progress-container").style.display = "block";
+      document.getElementById("transcription-text").innerText = "";
+      document.getElementById("transcription-result").style.display = "none"; // Esconder a transcrição
 
-      <div id="transcription-result">
-        <h2>Transcrição:</h2>
-        <pre id="transcription-text"></pre>
-      </div>
-    </div>
-
-    <script>
-      document
-        .getElementById("transcription-form")
-        .addEventListener("submit", function (event) {
-          event.preventDefault();
-          var youtubeUrl = document.getElementById("youtube-url").value;
-
-          // Mostrar o spinner de loading
-          document.getElementById("progress-container").style.display = "block";
-          document.getElementById("transcription-text").innerText = "";
-          document.getElementById("transcription-result").style.display =
-            "none"; // Esconder a transcrição
-
-          // Etapa 1: Baixar o vídeo
-          fetch("/baixar_video", {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ youtube_url: youtubeUrl }),
-          })
-            .then((response) => response.json())
-            .then((data) => {
-              if (data.error) {
-                throw new Error(data.error);
-              }
-
-              // Conectar ao servidor para receber o progresso
-              var eventSource = new EventSource("/progress");
-
-              eventSource.onmessage = function (event) {
-                var progressText = event.data;
-
-                // Quando a transcrição for concluída
-                if (progressText.startsWith("Transcrição finalizada")) {
-                  eventSource.close(); // Fechar a conexão SSE após a conclusão
-                  document.getElementById("progress-container").style.display =
-                    "none"; // Esconder o loading
-                  document.getElementById(
-                    "transcription-result"
-                  ).style.display = "block"; // Exibir a transcrição
-
-                  // Simular a digitação da transcrição
-                  typeText(
-                    progressText.replace("Transcrição finalizada: ", "")
-                  );
-                }
-              };
-            })
-            .catch((error) => {
-              document.getElementById("transcription-text").innerText =
-                "Erro: " + error.message;
-            });
-        });
-
-      // Função para simular a digitação
-      function typeText(text) {
-        let index = 0;
-        const speed = 20; // Velocidade da digitação (ms)
-        const transcriptionElement =
-          document.getElementById("transcription-text");
-
-        function type() {
-          if (index < text.length) {
-            transcriptionElement.innerHTML += text.charAt(index);
-            index++;
-            setTimeout(type, speed);
+      // Etapa 1: Baixar o vídeo e iniciar a transcrição
+      fetch("/baixar_video", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ youtube_url: youtubeUrl }),
+      })
+        .then((response) => response.json())
+        .then((data) => {
+          if (data.error) {
+            throw new Error(data.error);
           }
-        }
 
-        type();
+          // Capturar o transcribe_id retornado
+          var transcribeId = data.transcribe_id;
+
+          // Conectar ao servidor para receber o progresso usando o transcribeId
+          var eventSource = new EventSource(`/progress/${transcribeId}`);
+
+          eventSource.onmessage = function (event) {
+            var progressText = event.data;
+
+            // Quando a transcrição for concluída
+            if (progressText.startsWith("Transcrição finalizada")) {
+              eventSource.close(); // Fechar a conexão SSE após a conclusão
+              document.getElementById("progress-container").style.display =
+                "none"; // Esconder o loading
+              document.getElementById("transcription-result").style.display =
+                "block"; // Exibir a transcrição
+
+              // Simular a digitação da transcrição
+              typeText(progressText.replace("Transcrição finalizada: ", ""));
+            }
+          };
+        })
+        .catch((error) => {
+          document.getElementById("transcription-text").innerText =
+            "Erro: " + error.message;
+        });
+    });
+
+  // Função para simular a digitação
+  function typeText(text) {
+    let index = 0;
+    const speed = 20; // Velocidade da digitação (ms)
+    const transcriptionElement = document.getElementById("transcription-text");
+
+    function type() {
+      if (index < text.length) {
+        transcriptionElement.innerHTML += text.charAt(index);
+        index++;
+        setTimeout(type, speed);
       }
-    </script>
-  </body>
-</html>
+    }
+
+    type();
+  }
+</script>
