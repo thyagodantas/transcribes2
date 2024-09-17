@@ -170,8 +170,8 @@
                   typeText(
                     progressText.replace("Transcrição finalizada: ", "")
                   );
-                } else {
-                  // Atualizar o progresso na tela
+                } else if (!progressText.includes("Transcrevendo áudio...")) {
+                  // Atualizar o progresso na tela apenas se não for a mensagem de transcrição
                   document.getElementById("transcription-text").innerText =
                     progressText;
                 }
