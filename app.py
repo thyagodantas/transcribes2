@@ -9,34 +9,20 @@ import subprocess
 import time
 from flask_cors import CORS
 import threading
-from celery import Celery
-import uuid
+import redis
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://altekweb.com.br"}})
 
-# Configurando FFMPEG
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
-# Carregar o modelo Whisper
 model = whisper.load_model("base")
+redis_client = redis.StrictRedis(host='localhost', port=6379, db=0, decode_responses=True)
 
-# Configurar Celery com Redis
-app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
-
-def make_celery(app):
-    celery = Celery(
-        app.import_name,
-        backend=app.config['CELERY_RESULT_BACKEND'],
-        broker=app.config['CELERY_BROKER_URL']
-    )
-    celery.conf.update(app.config)
-    return celery
-
-celery = make_celery(app)
-
-progress_status = {}
+progress_status = {
+    "message": "Esperando para iniciar...",
+    "completed": False
+}
 
 @app.route('/')
 def index():
@@ -69,6 +55,7 @@ def download_video_with_cookies(url, resolution, cookies_file):
 
 def convert_to_wav(video_path):
     try:
+        # Identificar o tipo de arquivo para substituição da extensão
         if video_path.endswith('.mkv'):
             audio_path = video_path.replace('.mkv', '.wav')
         elif video_path.endswith('.mp4'):
@@ -78,6 +65,7 @@ def convert_to_wav(video_path):
         else:
             raise ValueError("Formato de vídeo não suportado. Use MP4, MKV ou WEBM.")
         
+        # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         
@@ -97,39 +85,35 @@ def transcribe_audio(audio_path):
         print("Transcrição concluída.")
         return result['text'], None
     except Exception as e:
-        print(f"Erro na transcrição: {str(e)}")  # Log do erro
+        print(f"Erro na transcrição: {str(e)}")
         return None, str(e)
 
-@celery.task
-def process_transcription_task(video_path, task_id):
-    global progress_status
+def process_transcription(video_path, task_id):
+    # Etapa 1: Converter vídeo para WAV
+    redis_client.hset(task_id, "message", "Convertendo vídeo para WAV...")
+    audio_path, error_message = convert_to_wav(video_path)
 
-    try:
-        # Adicione log para verificar a tarefa
-        print(f"Iniciando a tarefa: {task_id}")
+    if not audio_path:
+        redis_client.hset(task_id, "message", f"Erro ao converter vídeo: {error_message}")
+        redis_client.hset(task_id, "completed", True)
+        return
 
-        progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
+    # Etapa 2: Transcrever o áudio
+    redis_client.hset(task_id, "message", "Transcrevendo áudio...")
+    transcription, error_message = transcribe_audio(audio_path)
 
-        audio_path, error_message = convert_to_wav(video_path)
-        if not audio_path:
-            progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
-            return
+    if transcription:
+        os.remove(audio_path)
+        redis_client.hset(task_id, mapping={
+            "message": "Transcrição concluída.",
+            "transcription": transcription,
+            "completed": True
+        })
+    else:
+        redis_client.hset(task_id, "message", f"Erro na transcrição: {error_message}")
+        redis_client.hset(task_id, "completed", True)
 
-        progress_status[task_id]["message"] = "Transcrevendo áudio..."
-        transcription, error_message = transcribe_audio(audio_path)
-        if transcription:
-            os.remove(audio_path)
-            progress_status[task_id] = {
-                "message": "Transcrição concluída.",
-                "transcription": transcription,
-                "completed": True
-            }
-        else:
-            progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
-    except Exception as e:
-        progress_status[task_id] = {"message": f"Erro no processamento: {str(e)}", "completed": True}
-        print(f"Erro na tarefa {task_id}: {str(e)}")
-
+# Rota para baixar o vídeo e iniciar o processo de transcrição
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
     youtube_url = request.json.get('youtube_url')
@@ -144,37 +128,39 @@ def baixar_video():
     cookies_file = 'cookies.txt'
 
     video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file)
-    
+
     if not video_path:
         return jsonify({"error": error_message}), 500
-    
-    # Gera um ID único no formato generate-xxxxxx
-    task_id = f"generate-{uuid.uuid4().hex[:6]}"
-    progress_status[task_id] = {"message": "Vídeo baixado com sucesso! Iniciando transcrição...", "completed": False}
 
-    # Iniciar o processo de transcrição como uma tarefa em segundo plano
-    process_transcription_task.apply_async(args=[video_path, task_id])
+    # Gerar um ID único para a tarefa de transcrição
+    task_id = str(time.time())  # Você pode usar outro método para gerar um ID único
 
-    print(f"Task ID gerado: {task_id}")
-    print(f"Status atual: {progress_status}")
+    # Armazena o status no Redis com a chave do vídeo
+    redis_client.hset(task_id, mapping={
+        "message": "Vídeo baixado com sucesso! Iniciando transcrição...",
+        "completed": False,
+        "transcription": ""
+    })
+
+    # Iniciar o processo de transcrição em uma thread separada
+    threading.Thread(target=process_transcription, args=(video_path, task_id)).start()
 
     return jsonify({"message": "Processo de transcrição iniciado.", "task_id": task_id}), 200
 
+# Rota SSE para enviar progresso ao frontend a cada 10 segundos
 @app.route('/progress/<task_id>')
 def progress(task_id):
     def generate():
-        if task_id not in progress_status:
-            yield f"data: Tarefa {task_id} não encontrada.\n\n"
-            return
-
-        while not progress_status[task_id]["completed"]:
-            yield f"data: {progress_status[task_id]['message']}\n\n"
-            time.sleep(5)
-
-        yield f"data: Transcrição finalizada: {progress_status[task_id]['transcription']}\n\n"
+        while True:
+            progress_status = redis_client.hgetall(task_id)
+            if not progress_status.get("completed"):
+                yield f"data: {progress_status.get('message')}\n\n"
+                time.sleep(10)
+            else:
+                yield f"data: Transcrição finalizada: {progress_status.get('transcription')}\n\n"
+                break
 
     return Response(generate(), mimetype='text/event-stream')
-
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8000)

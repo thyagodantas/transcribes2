@@ -125,23 +125,19 @@
     </div>
 
     <script>
-      let isTranscribing = false; // Flag para controlar se a transcrição já está em andamento
-
       document
         .getElementById("transcription-form")
         .addEventListener("submit", function (event) {
           event.preventDefault();
-
-          if (isTranscribing) return; // Impede múltiplas requisições
-          isTranscribing = true; // Ativa a flag
-
           var youtubeUrl = document.getElementById("youtube-url").value;
 
+          // Mostrar o spinner de loading
           document.getElementById("progress-container").style.display = "block";
           document.getElementById("transcription-text").innerText = "";
           document.getElementById("transcription-result").style.display =
-            "none";
+            "none"; // Esconder a transcrição
 
+          // Etapa 1: Baixar o vídeo
           fetch("/baixar_video", {
             method: "POST",
             headers: {
@@ -155,31 +151,37 @@
                 throw new Error(data.error);
               }
 
-              var taskId = data.task_id;
-              var eventSource = new EventSource(`/progress/${taskId}`);
+              // Conectar ao servidor para receber o progresso usando o task_id
+              var eventSource = new EventSource(`/progress/${data.task_id}`);
 
               eventSource.onmessage = function (event) {
                 var progressText = event.data;
 
                 // Quando a transcrição for concluída
                 if (progressText.startsWith("Transcrição finalizada")) {
-                  eventSource.close();
+                  eventSource.close(); // Fechar a conexão SSE após a conclusão
                   document.getElementById("progress-container").style.display =
-                    "none";
+                    "none"; // Esconder o loading
                   document.getElementById(
                     "transcription-result"
-                  ).style.display = "block";
+                  ).style.display = "block"; // Exibir a transcrição
+
+                  // Simular a digitação da transcrição
                   typeText(
                     progressText.replace("Transcrição finalizada: ", "")
                   );
-                  isTranscribing = false; // Reseta a flag
+                } else {
+                  // Atualizar o progresso na tela
+                  document.getElementById("transcription-text").innerText =
+                    progressText;
                 }
               };
             })
             .catch((error) => {
               document.getElementById("transcription-text").innerText =
                 "Erro: " + error.message;
-              isTranscribing = false; // Reseta a flag em caso de erro
+              document.getElementById("progress-container").style.display =
+                "none"; // Esconder o loading
             });
         });
 
