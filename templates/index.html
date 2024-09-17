@@ -137,7 +137,7 @@
           document.getElementById("transcription-result").style.display =
             "none"; // Esconder a transcrição
 
-          // Etapa 1: Baixar o vídeo
+          // Etapa 1: Baixar o vídeo e iniciar o processo de transcrição
           fetch("/baixar_video", {
             method: "POST",
             headers: {
@@ -151,8 +151,10 @@
                 throw new Error(data.error);
               }
 
+              var taskId = data.task_id;
+
               // Conectar ao servidor para receber o progresso
-              var eventSource = new EventSource("/progress");
+              var eventSource = new EventSource(`/progress/${taskId}`);
 
               eventSource.onmessage = function (event) {
                 var progressText = event.data;

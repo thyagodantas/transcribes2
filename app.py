@@ -9,18 +9,33 @@ import subprocess
 import time
 from flask_cors import CORS
 import threading
+from celery import Celery
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://altekweb.com.br"}})
 
+# Configurando FFMPEG
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
+# Carregar o modelo Whisper
 model = whisper.load_model("base")
 
-progress_status = {
-    "message": "Esperando para iniciar...",
-    "completed": False
-}
+# Configurar Celery com Redis
+app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+
+def make_celery(app):
+    celery = Celery(
+        app.import_name,
+        backend=app.config['CELERY_RESULT_BACKEND'],
+        broker=app.config['CELERY_BROKER_URL']
+    )
+    celery.conf.update(app.config)
+    return celery
+
+celery = make_celery(app)
+
+progress_status = {}
 
 @app.route('/')
 def index():
@@ -53,7 +68,6 @@ def download_video_with_cookies(url, resolution, cookies_file):
 
 def convert_to_wav(video_path):
     try:
-        # Identificar o tipo de arquivo para substituição da extensão
         if video_path.endswith('.mkv'):
             audio_path = video_path.replace('.mkv', '.wav')
         elif video_path.endswith('.mp4'):
@@ -63,7 +77,6 @@ def convert_to_wav(video_path):
         else:
             raise ValueError("Formato de vídeo não suportado. Use MP4, MKV ou WEBM.")
         
-        # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         
@@ -86,32 +99,32 @@ def transcribe_audio(audio_path):
         print(f"Erro na transcrição: {str(e)}")
         return None, str(e)
 
-def process_transcription(video_path):
+@celery.task
+def process_transcription_task(video_path, task_id):
     global progress_status
 
-    # Etapa 1: Converter vídeo para WAV
-    progress_status['message'] = "Convertendo vídeo para WAV..."
-    audio_path, error_message = convert_to_wav(video_path)
+    # Inicializa o status do progresso para o task_id
+    progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
 
+    # Etapa 1: Converter vídeo para WAV
+    audio_path, error_message = convert_to_wav(video_path)
     if not audio_path:
-        progress_status['message'] = f"Erro ao converter vídeo: {error_message}"
-        progress_status['completed'] = True
+        progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
         return
 
     # Etapa 2: Transcrever o áudio
-    progress_status['message'] = "Transcrevendo áudio..."
+    progress_status[task_id]["message"] = "Transcrevendo áudio..."
     transcription, error_message = transcribe_audio(audio_path)
-
     if transcription:
         os.remove(audio_path)
-        progress_status['message'] = "Transcrição concluída."
-        progress_status['transcription'] = transcription
-        progress_status['completed'] = True
+        progress_status[task_id] = {
+            "message": "Transcrição concluída.",
+            "transcription": transcription,
+            "completed": True
+        }
     else:
-        progress_status['message'] = f"Erro na transcrição: {error_message}"
-        progress_status['completed'] = True
+        progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
 
-# Rota para baixar o vídeo e iniciar o processo de transcrição
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
     youtube_url = request.json.get('youtube_url')
@@ -130,24 +143,22 @@ def baixar_video():
     if not video_path:
         return jsonify({"error": error_message}), 500
     
-    global progress_status
-    progress_status['message'] = "Vídeo baixado com sucesso! Iniciando transcrição..."
-    progress_status['completed'] = False
+    task_id = str(time.time())  # Gera um ID único para a tarefa
+    progress_status[task_id] = {"message": "Vídeo baixado com sucesso! Iniciando transcrição...", "completed": False}
 
-    # Iniciar o processo de transcrição em uma thread separada
-    threading.Thread(target=process_transcription, args=(video_path,)).start()
+    # Iniciar o processo de transcrição como uma tarefa em segundo plano
+    process_transcription_task.apply_async(args=[video_path, task_id])
 
-    return jsonify({"message": "Processo de transcrição iniciado."}), 200
+    return jsonify({"message": "Processo de transcrição iniciado.", "task_id": task_id}), 200
 
-# Rota SSE para enviar progresso ao frontend a cada 10 segundos
-@app.route('/progress')
-def progress():
+@app.route('/progress/<task_id>')
+def progress(task_id):
     def generate():
-        while not progress_status['completed']:
-            yield f"data: {progress_status['message']}\n\n"
-            time.sleep(10)
+        while not progress_status[task_id]["completed"]:
+            yield f"data: {progress_status[task_id]['message']}\n\n"
+            time.sleep(5)
 
-        yield f"data: Transcrição finalizada: {progress_status['transcription']}\n\n"
+        yield f"data: Transcrição finalizada: {progress_status[task_id]['transcription']}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
 
