@@ -53,15 +53,28 @@ def download_video_with_cookies(url, resolution, cookies_file):
 
 def convert_to_wav(video_path):
     try:
-        audio_path = video_path.replace('.webm', '.wav')
+        # Identificar o tipo de arquivo para substituição da extensão
+        if video_path.endswith('.mkv'):
+            audio_path = video_path.replace('.mkv', '.wav')
+        elif video_path.endswith('.mp4'):
+            audio_path = video_path.replace('.mp4', '.wav')
+        elif video_path.endswith('.webm'):
+            audio_path = video_path.replace('.webm', '.wav')
+        else:
+            raise ValueError("Formato de vídeo não suportado. Use MP4, MKV ou WEBM.")
+        
         # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
+        
         print(f"Conversão concluída: {audio_path}")
         return audio_path, None
     except subprocess.CalledProcessError as e:
         print(f"Erro ao converter para WAV com ffmpeg: {str(e)}")
         return None, str(e)
+    except ValueError as ve:
+        print(str(ve))
+        return None, str(ve)
 
 def transcribe_audio(audio_path):
     try:
