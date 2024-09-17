@@ -181,6 +181,7 @@
               };
             })
             .catch((error) => {
+              alert("Erro: " + error.message);
               document.getElementById("transcription-text").innerText =
                 "Erro: " + error.message;
               document.getElementById("progress-container").style.display =
