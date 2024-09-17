@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, jsonify
+from flask import Flask, render_template, request, jsonify, Response
 from moviepy.editor import VideoFileClip
 import whisper
 import re
@@ -6,18 +6,22 @@ import os
 import yt_dlp
 import moviepy.config as mp_conf
 import subprocess
+import time
 from flask_cors import CORS
+import threading
 
 app = Flask(__name__)
 CORS(app)
 
-# Definir o caminho do ffmpeg manualmente
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
-# Carregar o modelo Whisper
 model = whisper.load_model("base")
 
-# Função para validar o formato da URL do YouTube
+progress_status = {
+    "message": "Esperando para iniciar...",
+    "completed": False
+}
+
 def is_valid_youtube_url(url):
     pattern = r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$"
     return re.match(pattern, url) is not None
@@ -25,13 +29,13 @@ def is_valid_youtube_url(url):
 def download_video_with_cookies(url, resolution, cookies_file):
     try:
         ydl_opts = {
-            'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',  
-            'cookiefile': cookies_file,  
-            'outtmpl': '%(title)s.%(ext)s',  
-            'continuedl': False,  
-            'noprogress': True,  
-            'retries': 10,  
-            'verbose': True  
+            'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',
+            'cookiefile': cookies_file,
+            'outtmpl': '%(title)s.%(ext)s',
+            'continuedl': False,
+            'noprogress': True,
+            'retries': 10,
+            'verbose': True
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -64,16 +68,36 @@ def transcribe_audio(audio_path):
         print(f"Erro na transcrição: {str(e)}")
         return None, str(e)
 
-# Rota principal para carregar a página inicial
-@app.route('/')
-def index():
-    return render_template('index.html')
+def process_transcription(video_path):
+    global progress_status
 
-# Etapa 1: Baixar o vídeo
+    # Etapa 1: Converter vídeo para WAV
+    progress_status['message'] = "Convertendo vídeo para WAV..."
+    audio_path, error_message = convert_to_wav(video_path)
+
+    if not audio_path:
+        progress_status['message'] = f"Erro ao converter vídeo: {error_message}"
+        progress_status['completed'] = True
+        return
+
+    # Etapa 2: Transcrever o áudio
+    progress_status['message'] = "Transcrevendo áudio..."
+    transcription, error_message = transcribe_audio(audio_path)
+
+    if transcription:
+        os.remove(audio_path)
+        progress_status['message'] = "Transcrição concluída."
+        progress_status['transcription'] = transcription
+        progress_status['completed'] = True
+    else:
+        progress_status['message'] = f"Erro na transcrição: {error_message}"
+        progress_status['completed'] = True
+
+# Rota para baixar o vídeo e iniciar o processo de transcrição
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
-    youtube_url = request.json.get('youtube_url')  # Usando JSON para a requisição AJAX
-    
+    youtube_url = request.json.get('youtube_url')
+
     if not youtube_url:
         return jsonify({"error": "URL do vídeo do YouTube é necessária."}), 400
 
@@ -88,38 +112,26 @@ def baixar_video():
     if not video_path:
         return jsonify({"error": error_message}), 500
     
-    return jsonify({"video_path": video_path}), 200
+    global progress_status
+    progress_status['message'] = "Vídeo baixado com sucesso! Iniciando transcrição..."
+    progress_status['completed'] = False
 
-# Etapa 2: Converter vídeo para WAV
-@app.route('/converter_video', methods=['POST'])
-def converter_video():
-    video_path = request.json.get('video_path')
+    # Iniciar o processo de transcrição em uma thread separada
+    threading.Thread(target=process_transcription, args=(video_path,)).start()
 
-    if not video_path:
-        return jsonify({"error": "O caminho do vídeo é necessário."}), 400
+    return jsonify({"message": "Processo de transcrição iniciado."}), 200
 
-    audio_path, error_message = convert_to_wav(video_path)
-    
-    if not audio_path:
-        return jsonify({"error": error_message}), 500
-    
-    return jsonify({"audio_path": audio_path}), 200
+# Rota SSE para enviar progresso ao frontend a cada 10 segundos
+@app.route('/progress')
+def progress():
+    def generate():
+        while not progress_status['completed']:
+            yield f"data: {progress_status['message']}\n\n"
+            time.sleep(10)
 
-# Etapa 3: Transcrever o áudio
-@app.route('/transcrever_audio', methods=['POST'])
-def transcrever_audio():
-    audio_path = request.json.get('audio_path')
+        yield f"data: Transcrição finalizada: {progress_status['transcription']}\n\n"
 
-    if not audio_path:
-        return jsonify({"error": "O caminho do áudio é necessário."}), 400
-
-    transcription, error_message = transcribe_audio(audio_path)
-    
-    if transcription:
-        os.remove(audio_path)  # Apaga o áudio após a transcrição
-        return jsonify({"transcricao": transcription}), 200
-    else:
-        return jsonify({"error": error_message}), 500
+    return Response(generate(), mimetype='text/event-stream')
 
 if __name__ == '__main__':
     app.run(debug=True, port=8000)
