@@ -54,7 +54,8 @@ def download_video_with_cookies(url, resolution, cookies_file):
 def convert_to_wav(video_path):
     try:
         audio_path = video_path.replace('.webm', '.wav')
-        command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '2', audio_path]
+        # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
+        command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         print(f"Conversão concluída: {audio_path}")
         return audio_path, None

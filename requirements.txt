@@ -1,5 +1,10 @@
-Flask==2.1.2
-requests==2.26.0
-yt-dlp==2023.3.4
-gunicorn==20.1.0
-ffmpeg-python==0.2.0
+flask
+flask-cors
+moviepy
+whisper
+yt-dlp
+re
+os
+subprocess
+time
+threading
