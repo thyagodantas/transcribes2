@@ -23,13 +23,13 @@ def is_valid_youtube_url(url):
 def download_video_with_cookies(url, resolution, cookies_file):
     try:
         ydl_opts = {
-            'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',
-            'cookiefile': cookies_file,
-            'outtmpl': '%(title)s.%(ext)s',
-            'continuedl': False,
-            'noprogress': True,
-            'retries': 10,
-            'verbose': True
+            'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',  
+            'cookiefile': cookies_file,  
+            'outtmpl': '%(title)s.%(ext)s',  
+            'continuedl': False,  
+            'noprogress': True,  
+            'retries': 10,  
+            'verbose': True  
         }
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -79,7 +79,7 @@ def index():
         if not is_valid_youtube_url(youtube_url):
             return jsonify({"error": "URL do vídeo do YouTube inválida."}), 400
 
-        # Definir uma resolução padrão (pode ser ajustada conforme necessário)
+        # Definir uma resolução padrão
         resolution = '360'
 
         # Caminho do arquivo de cookies

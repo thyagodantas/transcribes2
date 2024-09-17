@@ -71,32 +71,12 @@
         white-space: pre-wrap;
         word-wrap: break-word;
       }
-      #progress-container {
-        display: none;
-        width: 100%;
-        background-color: #f3f3f3;
-        border: 1px solid #ccc;
-        border-radius: 5px;
-        margin-top: 20px;
-      }
-      #progress-bar {
-        width: 0%;
-        height: 20px;
-        background-color: #4caf50;
-        border-radius: 5px;
-        transition: width 0.4s ease;
-      }
     </style>
   </head>
   <body>
     <div class="container">
       <h1>Transcrição de Vídeos do YouTube</h1>
-      <form
-        id="transcription-form"
-        method="POST"
-        action="/"
-        onsubmit="showLoading()"
-      >
+      <form method="POST" action="/">
         <label for="youtube-url">URL do Vídeo do YouTube:</label>
         <input
           type="text"
@@ -108,11 +88,6 @@
         <button type="submit">Transcrever</button>
       </form>
 
-      <div id="progress-container">
-        <div id="progress-bar"></div>
-        <p>Estamos pensando...</p>
-      </div>
-
       <div id="transcription-result">
         {% if transcricao %}
         <h2>Transcrição:</h2>
@@ -120,21 +95,5 @@
         {% endif %}
       </div>
     </div>
-
-    <script>
-      function showLoading() {
-        document.getElementById("progress-container").style.display = "block";
-        var width = 0;
-        var progressBar = document.getElementById("progress-bar");
-        var interval = setInterval(function () {
-          if (width >= 100) {
-            clearInterval(interval);
-          } else {
-            width++;
-            progressBar.style.width = width + "%";
-          }
-        }, 100);
-      }
-    </script>
   </body>
 </html>
