@@ -22,6 +22,10 @@ progress_status = {
     "completed": False
 }
 
+@app.route('/')
+def index():
+    return render_template('index.html')
+
 def is_valid_youtube_url(url):
     pattern = r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$"
     return re.match(pattern, url) is not None
