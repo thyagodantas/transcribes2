@@ -27,12 +27,12 @@ def is_valid_youtube_url(url):
     pattern = r"^(https?://)?(www\.)?(youtube\.com|youtu\.?be)/.+$"
     return re.match(pattern, url) is not None
 
-def download_video_with_cookies(url, resolution, cookies_file):
+def download_video_with_cookies(url, resolution, cookies_file, task_id):
     try:
         ydl_opts = {
             'format': f'bestvideo[height<={resolution}]+bestaudio/best[height<={resolution}]',
             'cookiefile': cookies_file,
-            'outtmpl': '%(title)s.%(ext)s',
+            'outtmpl': f'{task_id}.%(ext)s',  # Nome do arquivo baseado no task_id
             'continuedl': False,
             'noprogress': True,
             'retries': 10,
@@ -41,24 +41,16 @@ def download_video_with_cookies(url, resolution, cookies_file):
 
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             result = ydl.extract_info(url, download=True)
-            video_file = ydl.prepare_filename(result)
+            video_file = f"{task_id}.mp4"  # Assume que o vídeo baixado será .mp4
             print(f"Vídeo baixado com sucesso: {video_file}")
             return video_file, None
     except Exception as e:
         print(f"Erro ao baixar vídeo com yt-dlp: {str(e)}")
         return None, str(e)
 
-def convert_to_wav(video_path):
+def convert_to_wav(video_path, task_id):
     try:
-        # Identificar o tipo de arquivo para substituição da extensão
-        if video_path.endswith('.mkv'):
-            audio_path = video_path.replace('.mkv', '.wav')
-        elif video_path.endswith('.mp4'):
-            audio_path = video_path.replace('.mp4', '.wav')
-        elif video_path.endswith('.webm'):
-            audio_path = video_path.replace('.webm', '.wav')
-        else:
-            raise ValueError("Formato de vídeo não suportado. Use MP4, MKV ou WEBM.")
+        audio_path = f"{task_id}.wav"  # Nome do arquivo WAV baseado no task_id
         
         # Ajuste da taxa de amostragem para 48kHz e profundidade de bits para 24 bits para melhorar a qualidade
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s24le', '-ar', '48000', '-ac', '2', audio_path]
@@ -69,9 +61,6 @@ def convert_to_wav(video_path):
     except subprocess.CalledProcessError as e:
         print(f"Erro ao converter para WAV com ffmpeg: {str(e)}")
         return None, str(e)
-    except ValueError as ve:
-        print(str(ve))
-        return None, str(ve)
 
 def transcribe_audio(audio_path):
     try:
@@ -86,7 +75,7 @@ def transcribe_audio(audio_path):
 def process_transcription(video_path, task_id):
     # Etapa 1: Converter vídeo para WAV
     redis_client.hset(task_id, "message", "Convertendo vídeo para WAV...")
-    audio_path, error_message = convert_to_wav(video_path)
+    audio_path, error_message = convert_to_wav(video_path, task_id)
 
     if not audio_path:
         redis_client.hset(task_id, mapping={
@@ -100,7 +89,7 @@ def process_transcription(video_path, task_id):
     transcription, error_message = transcribe_audio(audio_path)
 
     if transcription:
-        os.remove(audio_path)
+        os.remove(audio_path)  # Remove o áudio depois da transcrição
         redis_client.hset(task_id, mapping={
             "message": "Transcrição concluída.",
             "transcription": transcription,
@@ -126,13 +115,13 @@ def baixar_video():
     resolution = '360'
     cookies_file = 'cookies.txt'
 
-    video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file)
+    # Gerar um ID único para a tarefa de transcrição
+    task_id = str(time.time())  # Você pode usar outro método para gerar um ID único
+
+    video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file, task_id)
 
     if not video_path:
         return jsonify({"error": error_message}), 500
-
-    # Gerar um ID único para a tarefa de transcrição
-    task_id = str(time.time())  # Você pode usar outro método para gerar um ID único
 
     # Armazena o status no Redis com a chave do vídeo
     redis_client.hset(task_id, mapping={
