@@ -4,8 +4,12 @@ import whisper
 import re
 import os
 import yt_dlp
+import moviepy.config as mp_conf
 
 app = Flask(__name__)
+
+# Definir o caminho do ffmpeg manualmente
+mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
 # Carregar o modelo Whisper
 model = whisper.load_model("base")
