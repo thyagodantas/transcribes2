@@ -101,6 +101,7 @@ def process_transcription(video_path, task_id):
 
     if transcription:
         os.remove(audio_path)
+        os.remove(video_path)
         redis_client.hset(task_id, mapping={
             "message": "Transcrição concluída.",
             "transcription": transcription,
