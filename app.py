@@ -105,16 +105,16 @@ def process_transcription_task(video_path, task_id):
     global progress_status
 
     try:
-        # Inicializa o status do progresso para o task_id
+        # Adicione log para verificar a tarefa
+        print(f"Iniciando a tarefa: {task_id}")
+
         progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
 
-        # Etapa 1: Converter vídeo para WAV
         audio_path, error_message = convert_to_wav(video_path)
         if not audio_path:
             progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
             return
 
-        # Etapa 2: Transcrever o áudio
         progress_status[task_id]["message"] = "Transcrevendo áudio..."
         transcription, error_message = transcribe_audio(audio_path)
         if transcription:
@@ -126,11 +126,9 @@ def process_transcription_task(video_path, task_id):
             }
         else:
             progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
-
     except Exception as e:
         progress_status[task_id] = {"message": f"Erro no processamento: {str(e)}", "completed": True}
-        print(f"Erro na tarefa {task_id}: {str(e)}")  # Log do erro
-
+        print(f"Erro na tarefa {task_id}: {str(e)}")
 
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
@@ -165,7 +163,6 @@ def baixar_video():
 @app.route('/progress/<task_id>')
 def progress(task_id):
     def generate():
-        # Verificar se o task_id existe no dicionário progress_status
         if task_id not in progress_status:
             yield f"data: Tarefa {task_id} não encontrada.\n\n"
             return
@@ -177,6 +174,7 @@ def progress(task_id):
         yield f"data: Transcrição finalizada: {progress_status[task_id]['transcription']}\n\n"
 
     return Response(generate(), mimetype='text/event-stream')
+
 
 
 if __name__ == '__main__':
