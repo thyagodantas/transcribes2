@@ -9,15 +9,12 @@
       href="{{ url_for('static', filename='style.css') }}"
     />
     <style>
-      /* Estilo geral do corpo */
       body {
         font-family: Arial, sans-serif;
         background-color: #f4f4f4;
         margin: 0;
         padding: 0;
       }
-
-      /* Container principal */
       .container {
         max-width: 800px;
         margin: 50px auto;
@@ -26,28 +23,20 @@
         border-radius: 8px;
         box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
       }
-
-      /* Título principal */
       h1 {
         font-size: 24px;
         color: #333;
         margin-bottom: 20px;
       }
-
-      /* Formulário */
       form {
         display: flex;
         flex-direction: column;
       }
-
-      /* Label do formulário */
       label {
         font-size: 16px;
         color: #333;
         margin-bottom: 8px;
       }
-
-      /* Input do formulário */
       input[type="text"] {
         padding: 10px;
         font-size: 16px;
@@ -55,8 +44,6 @@
         border-radius: 4px;
         margin-bottom: 20px;
       }
-
-      /* Botão do formulário */
       button {
         padding: 10px;
         font-size: 16px;
@@ -66,21 +53,16 @@
         border-radius: 4px;
         cursor: pointer;
       }
-
       button:hover {
         background-color: #0056b3;
       }
-
-      /* Resultado da transcrição */
       #transcription-result {
         margin-top: 20px;
       }
-
       #transcription-result h2 {
         font-size: 20px;
         color: #333;
       }
-
       #transcription-result pre {
         background-color: #f8f9fa;
         padding: 10px;
@@ -89,62 +71,20 @@
         white-space: pre-wrap;
         word-wrap: break-word;
       }
-
-      /* Estilos da barra de progresso */
       #progress-container {
-        display: none; /* Escondido por padrão */
+        display: none;
         width: 100%;
         background-color: #f3f3f3;
         border: 1px solid #ccc;
         border-radius: 5px;
         margin-top: 20px;
       }
-
       #progress-bar {
         width: 0%;
         height: 20px;
         background-color: #4caf50;
         border-radius: 5px;
         transition: width 0.4s ease;
-      }
-
-      /* Estilo do texto de carregamento */
-      #progress-container p {
-        text-align: center;
-        color: #333;
-        margin: 10px 0;
-      }
-
-      .typing-effect {
-        white-space: pre-wrap;
-        font-family: monospace;
-        font-size: 16px;
-        color: #333;
-        border-right: 2px solid #333;
-        padding: 5px;
-        overflow: hidden;
-        width: 100%;
-        box-sizing: border-box;
-        animation: typing 2s steps(50, end), blink-caret 0.75s step-end infinite;
-      }
-
-      @keyframes typing {
-        from {
-          width: 0;
-        }
-        to {
-          width: 100%;
-        }
-      }
-
-      @keyframes blink-caret {
-        from,
-        to {
-          border-color: transparent;
-        }
-        50% {
-          border-color: #333;
-        }
       }
     </style>
   </head>
@@ -154,7 +94,7 @@
       <form
         id="transcription-form"
         method="POST"
-        action="{{ url_for('transcrever') }}"
+        action="/"
         onsubmit="showLoading()"
       >
         <label for="youtube-url">URL do Vídeo do YouTube:</label>
@@ -176,9 +116,7 @@
       <div id="transcription-result">
         {% if transcricao %}
         <h2>Transcrição:</h2>
-        <div class="typing-effect" id="transcription-text">
-          {{ transcricao }}
-        </div>
+        <pre>{{ transcricao }}</pre>
         {% endif %}
       </div>
     </div>
@@ -186,7 +124,6 @@
     <script>
       function showLoading() {
         document.getElementById("progress-container").style.display = "block";
-        // Simulando carregamento para a barra de progresso
         var width = 0;
         var progressBar = document.getElementById("progress-bar");
         var interval = setInterval(function () {
@@ -196,27 +133,8 @@
             width++;
             progressBar.style.width = width + "%";
           }
-        }, 100); // Aumentar ou diminuir a velocidade do carregamento
+        }, 100);
       }
-
-      document.addEventListener("DOMContentLoaded", function () {
-        const transcriptionText = document.getElementById("transcription-text");
-        if (transcriptionText) {
-          const text = transcriptionText.innerText;
-          transcriptionText.innerText = "";
-          let index = 0;
-
-          function type() {
-            if (index < text.length) {
-              transcriptionText.innerText += text.charAt(index);
-              index++;
-              setTimeout(type, 10); // Ajuste a velocidade de digitação
-            }
-          }
-
-          type();
-        }
-      });
     </script>
   </body>
 </html>
