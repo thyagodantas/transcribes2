@@ -106,6 +106,7 @@ def transcrever():
         # Apagar os arquivos temporários após a transcrição
         os.remove(video_path)
         os.remove(audio_path)
+        print(f"Transcrição: {transcription}")
         return jsonify({"transcricao": transcription}), 200
     else:
         return jsonify({"error": error_message}), 500
