@@ -103,39 +103,66 @@
         .getElementById("transcription-form")
         .addEventListener("submit", function (event) {
           event.preventDefault();
-
           var youtubeUrl = document.getElementById("youtube-url").value;
 
           document.getElementById("progress-container").style.display = "block";
-          document.getElementById("transcription-text").innerText = "";
+          document.getElementById("transcription-text").innerText =
+            "Iniciando...";
 
-          // Fazer requisição AJAX
-          fetch("/transcrever", {
+          // Etapa 1: Baixar o vídeo
+          fetch("/baixar_video", {
             method: "POST",
             headers: {
               "Content-Type": "application/json",
             },
             body: JSON.stringify({ youtube_url: youtubeUrl }),
-            // Adicionando o timeout manualmente (opcional, caso precise fazer mais ajustes com long-polling)
-            timeout: 300000, // 300 segundos (5 minutos)
           })
             .then((response) => response.json())
             .then((data) => {
-              document.getElementById("progress-container").style.display =
-                "none";
+              if (data.error) {
+                throw new Error(data.error);
+              }
+              document.getElementById("transcription-text").innerText =
+                "Vídeo baixado! Convertendo para WAV...";
+
+              // Etapa 2: Converter vídeo para WAV
+              return fetch("/converter_video", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ video_path: data.video_path }),
+              });
+            })
+            .then((response) => response.json())
+            .then((data) => {
+              if (data.error) {
+                throw new Error(data.error);
+              }
+              document.getElementById("transcription-text").innerText =
+                "Conversão concluída! Transcrevendo...";
+
+              // Etapa 3: Transcrever o áudio
+              return fetch("/transcrever_audio", {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ audio_path: data.audio_path }),
+              });
+            })
+            .then((response) => response.json())
+            .then((data) => {
               if (data.transcricao) {
                 document.getElementById("transcription-text").innerText =
                   data.transcricao;
               } else if (data.error) {
-                document.getElementById("transcription-text").innerText =
-                  "Erro: " + data.error;
+                throw new Error(data.error);
               }
             })
             .catch((error) => {
-              document.getElementById("progress-container").style.display =
-                "none";
               document.getElementById("transcription-text").innerText =
-                "Erro: " + error;
+                "Erro: " + error.message;
             });
         });
     </script>

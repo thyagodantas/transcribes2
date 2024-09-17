@@ -9,13 +9,13 @@ import subprocess
 from flask_cors import CORS
 
 app = Flask(__name__)
-CORS(app)  # Isso vai permitir todas as origens
+CORS(app)
 
 # Definir o caminho do ffmpeg manualmente
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
 # Carregar o modelo Whisper
-model = whisper.load_model("tiny")
+model = whisper.load_model("base")
 
 # Função para validar o formato da URL do YouTube
 def is_valid_youtube_url(url):
@@ -46,7 +46,6 @@ def download_video_with_cookies(url, resolution, cookies_file):
 def convert_to_wav(video_path):
     try:
         audio_path = video_path.replace('.webm', '.wav')
-        # Reduzindo a taxa de amostragem para 16kHz
         command = ['ffmpeg', '-i', video_path, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '2', audio_path]
         subprocess.run(command, check=True)
         print(f"Conversão concluída: {audio_path}")
@@ -70,46 +69,54 @@ def transcribe_audio(audio_path):
 def index():
     return render_template('index.html')
 
-# Rota assíncrona para processar a transcrição
-@app.route('/transcrever', methods=['POST'])
-def transcrever():
+# Etapa 1: Baixar o vídeo
+@app.route('/baixar_video', methods=['POST'])
+def baixar_video():
     youtube_url = request.json.get('youtube_url')  # Usando JSON para a requisição AJAX
     
     if not youtube_url:
         return jsonify({"error": "URL do vídeo do YouTube é necessária."}), 400
 
-    print(f"Recebendo URL: {youtube_url}")
-
-    # Verificar se a URL é válida
     if not is_valid_youtube_url(youtube_url):
         return jsonify({"error": "URL do vídeo do YouTube inválida."}), 400
 
-    # Definir uma resolução padrão (pode ser ajustada conforme necessário)
     resolution = '360'
-
-    # Caminho do arquivo de cookies (certifique-se de que está correto)
     cookies_file = 'cookies.txt'
 
-    # Download do vídeo com yt-dlp usando cookies
     video_path, error_message = download_video_with_cookies(youtube_url, resolution, cookies_file)
     
     if not video_path:
         return jsonify({"error": error_message}), 500
     
-    # Converter para WAV
+    return jsonify({"video_path": video_path}), 200
+
+# Etapa 2: Converter vídeo para WAV
+@app.route('/converter_video', methods=['POST'])
+def converter_video():
+    video_path = request.json.get('video_path')
+
+    if not video_path:
+        return jsonify({"error": "O caminho do vídeo é necessário."}), 400
+
     audio_path, error_message = convert_to_wav(video_path)
     
     if not audio_path:
         return jsonify({"error": error_message}), 500
     
-    # Transcrição do áudio
+    return jsonify({"audio_path": audio_path}), 200
+
+# Etapa 3: Transcrever o áudio
+@app.route('/transcrever_audio', methods=['POST'])
+def transcrever_audio():
+    audio_path = request.json.get('audio_path')
+
+    if not audio_path:
+        return jsonify({"error": "O caminho do áudio é necessário."}), 400
+
     transcription, error_message = transcribe_audio(audio_path)
     
     if transcription:
-        # Apagar os arquivos temporários após a transcrição
-        os.remove(video_path)
-        os.remove(audio_path)
-        print(f"Transcrição: {transcription}")
+        os.remove(audio_path)  # Apaga o áudio após a transcrição
         return jsonify({"transcricao": transcription}), 200
     else:
         return jsonify({"error": error_message}), 500
