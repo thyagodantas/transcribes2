@@ -10,6 +10,7 @@ import time
 from flask_cors import CORS
 import threading
 from celery import Celery
+import uuid
 
 app = Flask(__name__)
 CORS(app, resources={r"/*": {"origins": "https://altekweb.com.br"}})
@@ -103,27 +104,32 @@ def transcribe_audio(audio_path):
 def process_transcription_task(video_path, task_id):
     global progress_status
 
-    # Inicializa o status do progresso para o task_id
-    progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
+    try:
+        # Inicializa o status do progresso para o task_id
+        progress_status[task_id] = {"message": "Convertendo vídeo para WAV...", "completed": False}
 
-    # Etapa 1: Converter vídeo para WAV
-    audio_path, error_message = convert_to_wav(video_path)
-    if not audio_path:
-        progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
-        return
+        # Etapa 1: Converter vídeo para WAV
+        audio_path, error_message = convert_to_wav(video_path)
+        if not audio_path:
+            progress_status[task_id] = {"message": f"Erro ao converter vídeo: {error_message}", "completed": True}
+            return
 
-    # Etapa 2: Transcrever o áudio
-    progress_status[task_id]["message"] = "Transcrevendo áudio..."
-    transcription, error_message = transcribe_audio(audio_path)
-    if transcription:
-        os.remove(audio_path)
-        progress_status[task_id] = {
-            "message": "Transcrição concluída.",
-            "transcription": transcription,
-            "completed": True
-        }
-    else:
-        progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
+        # Etapa 2: Transcrever o áudio
+        progress_status[task_id]["message"] = "Transcrevendo áudio..."
+        transcription, error_message = transcribe_audio(audio_path)
+        if transcription:
+            os.remove(audio_path)
+            progress_status[task_id] = {
+                "message": "Transcrição concluída.",
+                "transcription": transcription,
+                "completed": True
+            }
+        else:
+            progress_status[task_id] = {"message": f"Erro na transcrição: {error_message}", "completed": True}
+
+    except Exception as e:
+        progress_status[task_id] = {"message": f"Erro no processo: {str(e)}", "completed": True}
+
 
 @app.route('/baixar_video', methods=['POST'])
 def baixar_video():
@@ -143,7 +149,8 @@ def baixar_video():
     if not video_path:
         return jsonify({"error": error_message}), 500
     
-    task_id = str(time.time())  # Gera um ID único para a tarefa
+    # Gera um ID único no formato generate-xxxxxx
+    task_id = f"generate-{uuid.uuid4().hex[:6]}"  # Gera um ID do tipo "generate-xxxxxx"
     progress_status[task_id] = {"message": "Vídeo baixado com sucesso! Iniciando transcrição...", "completed": False}
 
     # Iniciar o processo de transcrição como uma tarefa em segundo plano
