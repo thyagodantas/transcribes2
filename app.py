@@ -6,8 +6,10 @@ import os
 import yt_dlp
 import moviepy.config as mp_conf
 import subprocess
+from flask_cors import CORS
 
 app = Flask(__name__)
+CORS(app)  # Isso vai permitir todas as origens
 
 # Definir o caminho do ffmpeg manualmente
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
