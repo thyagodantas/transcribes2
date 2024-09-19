@@ -12,7 +12,7 @@ import threading
 import redis
 
 app = Flask(__name__)
-CORS(app, resources={r"/*": {"origins": "https://altekweb.com.br"}})
+CORS(app)
 
 mp_conf.change_settings({"FFMPEG_BINARY": "/usr/bin/ffmpeg"})
 
